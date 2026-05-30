@@ -1,13 +1,32 @@
 <?php
-// Obtener umbral actual desde la BD
-$db = new PDO('sqlite:' . __DIR__ . '/temperatura.db');
+function getDB(): PDO {
+    $host = getenv('DB_HOST')     ?: 'localhost';
+    $port = getenv('DB_PORT')     ?: '3306';
+    $name = getenv('DB_NAME')     ?: 'temperatura';
+    $user = getenv('DB_USER')     ?: 'root';
+    $pass = getenv('DB_PASSWORD') ?: '';
+
+    $pdo = new PDO("mysql:host=$host;port=$port;dbname=$name;charset=utf8", $user, $pass);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS configuracion (
+        id         INT   NOT NULL PRIMARY KEY DEFAULT 1,
+        umbral     FLOAT NOT NULL DEFAULT 30.0,
+        updated_at DATETIME NOT NULL DEFAULT NOW()
+    )");
+    $pdo->exec("INSERT IGNORE INTO configuracion (id, umbral) VALUES (1, 30.0)");
+
+    return $pdo;
+}
+
+$db = getDB();
 $umbralActual = $db->query("SELECT umbral FROM configuracion WHERE id = 1")->fetchColumn();
 
 $mensaje = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['umbral'])) {
     $nuevo = (float) $_POST['umbral'];
     if ($nuevo >= -50 && $nuevo <= 150) {
-        $stmt = $db->prepare("UPDATE configuracion SET umbral = ?, updated_at = datetime('now','localtime') WHERE id = 1");
+        $stmt = $db->prepare("UPDATE configuracion SET umbral = ?, updated_at = NOW() WHERE id = 1");
         $stmt->execute([$nuevo]);
         $umbralActual = $nuevo;
         $mensaje = 'ok';
@@ -102,9 +121,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['umbral'])) {
   </form>
 
   <?php if ($mensaje === 'ok'): ?>
-    <div class="alerta ok">Umbral actualizado correctamente. El ESP32 lo aplicará en la próxima consulta.</div>
+    <div class="alerta ok">Umbral actualizado. El ESP32 lo aplicará en la próxima consulta.</div>
   <?php elseif ($mensaje === 'error'): ?>
-    <div class="alerta error">Valor fuera de rango. Ingresa un valor entre -50 y 150 °C.</div>
+    <div class="alerta error">Valor fuera de rango. Ingresa entre -50 y 150 °C.</div>
   <?php endif; ?>
 
   <div class="umbral-actual">
